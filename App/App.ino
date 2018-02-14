@@ -2,13 +2,14 @@
 
 #include <SPI.h> //bibliothèqe pour SPI
 #include <Ethernet.h> //bibliothèque pour Ethernet
-#include <ChainableLED.h>
-#include <string.h>
+#include "ChainableLED.h"
 
 #include "SparkFunBME280.h"
 //Library allows either I2C or SPI, so include both.
 #include "Wire.h"
 #include "SPI.h"
+
+#include <avr/pgmspace.h>
 
 #define NUM_LEDS  5
 
@@ -17,64 +18,80 @@ byte ip[] = {192, 168, 1, 123}; //tableau pour l'adresse IP
 
 
 
-
-const char* homeFirst = 
-"HTTP/1.1 200 OK"
-"Content-Type: text/html"
-"Connection: close"
-"Refresh: 5"
-""
-"<!DOCTYPE HTML>"
-"<html>"
-  "<head>"
-    "<title>Relevés analogiques</title>"
-  "</head>"
+const char homeFirst[] PROGMEM = \
+"<!DOCTYPE HTML>" \
+"<html>" \
+  "<!--<meta http-equiv=\"refresh\" content=\"2\" >-->" \
+  "<head>" \
+    "<title>Relevés analogiques</title>" \
+  "</head>" \
   
-  "<body>"
-    "<h1>Données</h1>";
+  "<body>" \
+    "<h1>Données</h1>\0";
 
 
-const char* homeSecond = 
-    "<hr>"
-  
-    "<h1>Controle de la LED</h1>"
-      
-    "<hr>"
-      
-    "R :"
-    "<input type=\"text\" />"
-    "<br>"
-      
-    "G :"
-    "<input type=\"text\" />"
-    "<br>"
-    
-    "B :"
-    "<input type=\"text\" />"
-    "<br>"
-      
-    "<hr>"
-  "</body>"
-"</html>";
+const char homeSecond[] PROGMEM = \
+    "<hr>" \
+    "<h1>Controle de la LED</h1>" \
+    "<hr>" \
+    "R :" \
+    "<input id=\"red\" type=\"text\" />" \
+    "<br>" \
+    "G :" \
+    "<input id=\"green\" type=\"text\" />" \
+    "<br>" \
+    "B :" \
+    "<input id=\"blue\" type=\"text\" />" \
+    "<br>" \
+    "<button onclick=\"go()\">Ok</button>" \
+    "<hr>" \
+
+    "<SCRIPT LANGUAGE=\"JavaScript\">" \
+     "  function go(){" \
+      "  var red = document.getElementById(\"red\").value;" \
+      "  var green = document.getElementById(\"green\").value;" \
+      "  var blue = document.getElementById(\"blue\").value;" \
+
+     "   var url = \"/color/\" + red + \"/\" + green + \"/\" + blue;" \
+        
+      "  document.location.href=url;" \
+      " }" \
+    "  " \
+    "</SCRIPT>" \
+  "</body>" \
+"</html>\0";
 
 
+//String readString = String();
 EthernetServer serveur(80);
 ChainableLED leds(7, 8, NUM_LEDS);
 BME280 capteur;
+MatchState ms;
+char buff[500];
+int i = 0;
 
-String readString;
+float temperature;
+float pressure;
+float humidity;
+char c;
+EthernetClient client;
 
-float hue = 0.0;
-boolean up = true;
-int r = 255;
-int g = 255;
-int b = 255;
 
-void printValue(const char* title, int value) {
-  Serial.print(title);
-  Serial.print(" <input type=\"text\" value=\"");
-  Serial.print(value);
-  Serial.print("\" disabled />");
+
+int red, blue, green;
+
+boolean currentLineIsBlank = true;
+
+char* printValue(const char* title, int value) {
+  
+
+  sprintf(buff, "%s <input type=\"text\" value=\"%d\" disabled />", title, value);
+
+
+//Serial.println(" <input type=\"text\" value=\"");
+//Serial.print(result);
+  
+  return buff;
 }
 
 void setup()
@@ -96,61 +113,80 @@ void setup()
   
   Ethernet.begin (mac, ip); //initialisatio de la communication Ethernet
   
-  Serial.print("\nLe serveur est sur l'adresse : ");
-  Serial.println(Ethernet.localIP()); //on affiche l'adresse IP de la connexion
-  
   serveur.begin();
   
   leds.init();
   //Serial.begin(9600);// initialisation de la communication
-  Serial.println("Communication initialisée");// envoi d'un message
 
-  Serial.println("Starting BME280... ");
   delay(10);  // attente de la mise en route du capteur. 2 ms minimum
   // chargement de la configuration du capteur
   capteur.begin();
+  
+  Serial.println(F("Inited... "));
 }
+
+
 
 void loop()
 {
-  float temperature = capteur.readTempC();
-  float pressure = capteur.readFloatPressure() / 100;
-  float humidity = capteur.readFloatHumidity();
+   temperature = capteur.readTempC();
+   pressure = capteur.readFloatPressure() / 100;
+   humidity = capteur.readFloatHumidity();
   
-  EthernetClient client = serveur.available();
+  client = serveur.available();
+
+  
   
   if (client) { //si client connecté et si le client est en connecté
-    Serial.println("Client connected"); //on le dit...
+    Serial.println(F("Client connected")); //on le dit...
 
-    boolean currentLineIsBlank = true;
+    
     while(client.connected()) {
       if(client.available()) {
-        char c = client.read(); // on lit le caractère 
+        c = client.read(); // on lit le caractère 
        
         Serial.write(c);// on l'écrit sur le moniteur série
-        readString += c;
+        buff[i] = c;
 
+        i++;
+        
+        //readString += c;
+        
         if (c == '\n' && currentLineIsBlank) {
           
-          MatchState ms;
-          ms.Target ((char*) readString.c_str());
+          //strcpy_P(buff,readString.c_str());
+          //readString = "";
+          ms.Target (buff);
           
           if (ms.Match ("/home") == REGEXP_MATCHED) {
+            buff[0] = '\0';
+            
             // matching offsets in ms.capture
-            client.print(homeFirst);
-            printValue("Température", temperature);
-            printValue("Pression", pressure);
-            printValue("Humidité", humidity);
-            client.print(homeSecond);
+               // read back a char
+               
+            strcpy_P(buff,homeFirst);
+            client.print(buff);
+            
+            client.print(printValue("Température", temperature));
+            client.print(printValue("Pression", pressure));
+            client.print(printValue("Humidité", humidity));
+
+            strcpy_P(buff,homeSecond);
+            client.print(buff);
+
+            buff[0] = '\0';
+
+            client.stop();
+
           }
           
           if (ms.Match ("/color/(%d+)/(%d+)/(%d+)") == REGEXP_MATCHED) {
             // matching offsets in ms.capture
             
-            Serial.print ("Captures: ");
+            Serial.print (F("Captures: "));
             Serial.println (ms.level);
 
-            int red, blue, green;
+            
 
             for (int j = 0; j < ms.level; j++)
             {
@@ -158,20 +194,21 @@ void loop()
               Serial.println (j, DEC);
 
               if (j == 0) {
-                red = ms.GetCapture ((char*)readString.c_str(), j);
+                
+                red = String(ms.GetCapture (buff, j)).toInt();
               } else if (j == 1) {
-                blue = ms.GetCapture ((char*)readString.c_str(), j);
+                blue = String(ms.GetCapture (buff, j)).toInt();
               } else if (j == 2) {
-                green = ms.GetCapture ((char*)readString.c_str(), j);
+                green = String(ms.GetCapture (buff, j)).toInt();
               }            
             } // end of for each capture
 
-            Serial.print ("Values");
-            Serial.print (red, DEC);
+            Serial.print (F("Values"));
+            Serial.print (red);
             Serial.print (" ");
-            Serial.print (blue, DEC);
+            Serial.print (blue);
             Serial.print (" ");
-            Serial.print (green, DEC);
+            Serial.print (green);
             Serial.print ("\n");
 
             leds.setColorRGB(0, red, blue, green);
@@ -190,11 +227,11 @@ void loop()
     
     // give the web browser time to receive the data
     delay(1);
+    i = 0;
     // close the connection:
-    client.stop();
-    Serial.println("client disconnected");
+    //client.stop();
   }
   
-  Serial.println("Choisissez r : ");//envoi d'un autre message 
+  //Serial.println("Choisissez r : ");//envoi d'un autre message 
 }
 
