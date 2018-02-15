@@ -23,6 +23,7 @@ const char homeFirst[] PROGMEM = \
 "<html>" \
   "<!--<meta http-equiv=\"refresh\" content=\"2\" >-->" \
   "<head>" \
+    "<meta charset=\"utf-8\" />" \
     "<title>Relevés analogiques</title>" \
   "</head>" \
   
@@ -212,6 +213,7 @@ void loop()
             Serial.print ("\n");
 
             leds.setColorRGB(0, red, blue, green);
+            client.stop();
           }
         }
 
