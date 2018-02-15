@@ -168,9 +168,9 @@ void loop()
             strcpy_P(buff,homeFirst);
             client.print(buff);
             
-            client.print(printValue("Température", temperature));
-            client.print(printValue("Pression", pressure));
-            client.print(printValue("Humidité", humidity));
+            client.print(printValue("Température (°C)", temperature));
+            client.print(printValue("Pression (hPa)", pressure));
+            client.print(printValue("Humidité (%)", humidity));
 
             strcpy_P(buff,homeSecond);
             client.print(buff);
